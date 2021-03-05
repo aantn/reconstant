@@ -1,6 +1,7 @@
 import argparse
 import yaml
 import textwrap
+from typing import List
 from pydantic import BaseModel
 
 
@@ -12,13 +13,13 @@ class OutputConfig (BaseModel):
 
 class Constant (BaseModel):
     name: str
-    values: list[str]
-    options: list[str] = []
+    values: List[str]
+    options: List[str] = []
 
 
 class Config (BaseModel):
-    constants : list[Constant]
-    outputs: list[OutputConfig]
+    constants : List[Constant]
+    outputs: List[OutputConfig]
 
 
 class Outputer:
