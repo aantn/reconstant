@@ -8,7 +8,6 @@ from pydantic import BaseModel
 class OutputConfig (BaseModel):
     language: str
     path: str
-    add_prefix: bool = False
 
 
 class Constant (BaseModel):
@@ -50,13 +49,20 @@ class Outputer:
             self.output.write(f"{prefix}{key} {assignment} {value}{suffix}\n")
 
 
-class PythonOutputer (Outputer):
-    
+class PythonEnumOutputer (Outputer):
+    def output_header(self):
+        super().output_header()
+        self.output.write("from enum import Enum\n\n")
+
     def output_constant(self, constant : Constant):
-        if self.config.add_prefix:
-            self._do_standard_output(constant, prefix=f"{constant.name}_")
-        else:
-            self._do_standard_output(constant)
+        self.output.write(f"class {constant.name.capitalize()}(Enum):\n")
+        self._do_standard_output(constant, prefix=f"\t")
+        self.output.write(f"\n")
+
+
+class PythonVariablesOutputer (Outputer):
+    def output_constant(self, constant : Constant):
+        self._do_standard_output(constant, prefix=f"{constant.name}_")
 
 
 class JavascriptOutputer (Outputer):
@@ -88,7 +94,9 @@ class VueMixinOutputer (JavascriptOutputer):
 
 def create_outputer(output_config : OutputConfig):
     if output_config.language == "python":
-        return PythonOutputer(output_config)
+        return PythonEnumOutputer(output_config)
+    if output_config.language == "python2":
+        return PythonVariablesOutputer(output_config)
     elif output_config.language == "javascript":
         return JavascriptOutputer(output_config)
     elif output_config.language == "vue-mixin":
