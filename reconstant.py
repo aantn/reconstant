@@ -107,8 +107,8 @@ class AllOutputs (BaseModel):
 
 
 class RootConfig (BaseModel):
-    enums : List[Enum]
-    constants : List[Constant]
+    enums : List[Enum] = []
+    constants : List[Constant] = []
     outputs: AllOutputs
 
 
