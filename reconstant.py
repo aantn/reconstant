@@ -84,6 +84,37 @@ class JavascriptOutputer (Outputer):
         return super().output_constant(constant, prefix="export const ")
 
 
+class COutputer (Outputer):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(comment_mark="//", *args, **kwargs)
+
+    def output_header(self):
+        super().output_header()
+        guard_name = self._get_guard_name()
+        self._output.write(textwrap.dedent(f"""\
+            #ifndef {guard_name}
+            #define {guard_name}
+            """))
+
+    def output_footer(self):
+        super().output_footer()
+        guard_name = self._get_guard_name()
+        self._output.write(f"\n#endif /* {guard_name} */")
+
+    def _get_guard_name(self):
+        return self.path.replace('/', '_').replace(".", "_").upper()
+
+    def output_enum(self, enum : Enum):
+        self._output.write(f"typedef enum {{ {', '.join([val for val in enum.values])} }} {enum.name};\n")
+
+    def output_constant(self, constant: Constant):
+        name = inflection.underscore(constant.name).upper()
+        if type(constant.value) == str:
+            self._output.write(f'const char* {name} = "{constant.value}";\n')
+        else:
+            self._output.write(f'const {type(constant.value).__name__} {name} = {constant.value};\n')
+    
 class VueMixinOutputer (JavascriptOutputer):
 
     def output_enum(self, enum : Enum):
@@ -104,6 +135,7 @@ class AllOutputs (BaseModel):
     python2: Python2Outputer = None
     javascript: JavascriptOutputer = None
     vue: VueMixinOutputer = None
+    c: COutputer = None
 
 
 class RootConfig (BaseModel):
@@ -113,15 +145,7 @@ class RootConfig (BaseModel):
 
 
 def process_input(config: RootConfig):
-    outputers: List[Outputer] = []
-    if config.outputs.python is not None:
-        outputers.append(config.outputs.python)
-    if config.outputs.python2 is not None:
-        outputers.append(config.outputs.python2)
-    if config.outputs.javascript is not None:
-        outputers.append(config.outputs.javascript)
-    if config.outputs.vue is not None:
-        outputers.append(config.outputs.vue)
+    outputers = [getattr(config.outputs, x) for x in config.outputs.__fields_set__]
 
     for outputer in outputers:
         outputer.output_header()
