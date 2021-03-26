@@ -21,11 +21,13 @@ class Outputer (BaseModel):
     path: str
     _output: TextIO = PrivateAttr()
     _comment_mark: str = PrivateAttr()
+    _comment_indentation: int = PrivateAttr() # doesn't apply to the comment in output_header()
 
-    def __init__(self, *args, comment_mark="#", **kwargs):
+    def __init__(self, *args, comment_mark="#", comment_indentation=0, **kwargs):
         super().__init__(*args, **kwargs)
         self._output = open(self.path, "w")
         self._comment_mark = comment_mark
+        self._comment_indentation = comment_indentation
     
     def __del__(self):
         self._output.close()
@@ -35,7 +37,8 @@ class Outputer (BaseModel):
             self._output.write(f"{prefix}{value} {assignment} {i}{suffix}\n")
 
     def output_comment(self, comment):
-        self._output.write(f"\n{self._comment_mark} {comment}\n")
+        indent = '\t' * self._comment_indentation
+        self._output.write(f"\n{indent}{self._comment_mark} {comment}\n")
     
     def output_constant(self, constant: Constant, prefix="", assignment="=", suffix=""):
         if type(constant.value) == int:
@@ -88,7 +91,7 @@ class JavascriptOutputer (Outputer):
 class JavaOutputer (Outputer):
 
     def __init__(self, *args, **kwargs):
-        super().__init__(comment_mark="//", *args, **kwargs)
+        super().__init__(comment_mark="//", comment_indentation=1, *args, **kwargs)
 
     def output_header(self):
         super().output_header()
