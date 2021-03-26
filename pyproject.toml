@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "reconstant"
-version = "0.4.0"
+version = "0.4.1"
 description = "Share constant definitions between programming languages and make your constants constant again."
 authors = ["Natan Yellin <aantny@gmail.com>"]
 
