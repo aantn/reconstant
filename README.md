@@ -9,7 +9,7 @@ This is still a WIP. Feel free to open an issue on github with questions or a PR
 
 # Other tools
 
-I also work on [Robusta](https://github.com/robusta-dev/robusta) - a Kubernetes troubleshooting and automation platform. If you use Kubernetes, you'll like it.
+I also work on [HolmesGPT](https://github.com/robusta-dev/holmesgpt/) - an AI agent for investigating cloud alerts. Feel free to try it out!
 
 # Example
 ## Create an input file
