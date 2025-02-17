@@ -183,6 +183,25 @@ class VueMixinOutputer (JavascriptOutputer):
             """))
 
 
+class ROutputer (Outputer):
+    """R-language Outputer"""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(comment_mark="#", *args, **kwargs)
+
+    def output_enum(self, constant : Constant):
+        super().output_enum(constant, assignment="<-", prefix=f"{inflection.underscore(constant.name).upper()}_")
+
+    def output_constant(self, constant: Constant, prefix="", assignment="<-", suffix=""):
+        if type(constant.value) == int:
+            value = constant.value
+        elif type(constant.value) == str:
+            value = f'"{constant.value}"'
+        else:
+            raise Exception("Internal error - illegal constant type. %s", type(constant.value))
+        self._output.write(f"{prefix}{constant.name} {assignment} {value}{suffix}\n")
+
+
 class AllOutputs (BaseModel):
     python: Python3Outputer = None
     python2: Python2Outputer = None
@@ -191,6 +210,7 @@ class AllOutputs (BaseModel):
     c: COutputer = None
     java: JavaOutputer = None
     rust: RustOutputer = None
+    r: ROutputer = None
 
 
 class RootConfig (BaseModel):
