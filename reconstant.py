@@ -162,9 +162,9 @@ class COutputer (Outputer):
     def output_constant(self, constant: Constant):
         name = inflection.underscore(constant.name).upper()
         if type(constant.value) == str:
-            self._output.write(f'const char* {name} = "{constant.value}";\n')
+            self._output.write(f'#define {name} "{constant.value}"\n')
         else:
-            self._output.write(f'const {type(constant.value).__name__} {name} = {constant.value};\n')
+            self._output.write(f'#define {name} {constant.value}\n')
 
 
 # idea from https://stackoverflow.com/a/65734013/495995
