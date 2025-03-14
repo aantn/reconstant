@@ -202,6 +202,37 @@ class ROutputer (Outputer):
         self._output.write(f"{prefix}{constant.name} {assignment} {value}{suffix}\n")
 
 
+class DartOutputer (Outputer):
+    """Dart-language Outputer"""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(comment_mark="//", *args, **kwargs)
+
+    def output_header(self):
+        super().output_header()
+        self._output.write("library constants;\n\n")
+
+    def output_enum(self, enum: Enum):
+        self._output.write(f"enum {enum.name} {{\n")
+        # Convert enum values to lowercase for more Dart-like style
+        values = ",\n  ".join([val.lower() for val in enum.values])
+        self._output.write(f"  {values}\n}}\n")
+
+    def output_constant(self, constant: Constant):
+        # Convert constant names to camelCase for Dart conventions
+        # First convert to lowercase, then camelize to get proper camelCase
+        dart_name = constant.name.lower()
+        dart_name = inflection.camelize(dart_name, uppercase_first_letter=False)
+        if type(constant.value) == int:
+            self._output.write(f'const {dart_name} = {constant.value};\n')
+        elif type(constant.value) == str:
+            # Escape any special characters in strings
+            escaped_value = constant.value.replace('"', '\\"').replace('\n', '\\n')
+            self._output.write(f'const {dart_name} = "{escaped_value}";\n')
+        else:
+            raise Exception(f"Internal error - unsupported constant type: {type(constant.value)}")
+
+
 class AllOutputs (BaseModel):
     python: Python3Outputer = None
     python2: Python2Outputer = None
@@ -211,6 +242,7 @@ class AllOutputs (BaseModel):
     java: JavaOutputer = None
     rust: RustOutputer = None
     r: ROutputer = None
+    dart: DartOutputer = None
 
 
 class RootConfig (BaseModel):
