@@ -5,10 +5,10 @@ description = "Share constant definitions between programming languages and make
 authors = ["Natan Yellin <aantny@gmail.com>"]
 
 [tool.poetry.dependencies]
-python = "^3.6.9"
-PyYAML = "^5.4.1"
-pydantic = "^1.8.1"
-inflection = "^0.5.1"
+python = ">=3.6.9"
+PyYAML = ">=5.4.1"
+pydantic = ">=1.8.1"
+inflection = ">=0.5.1"
 
 [tool.poetry.dev-dependencies]
 
