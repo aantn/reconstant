@@ -8,11 +8,20 @@ const otherConstant = 42;
 
 // enums
 enum SomeEnum {
-  a,
-  b,
-  c
+	a(0),
+	b(1),
+	c(2);
+
+	final int code;
+	const SomeEnum(this.code);
 }
 enum OtherEnum {
-  foo,
-  bar
+	foo(0),
+	bar(1),
+	baz(2),
+	quux(5),
+	corge(6);
+
+	final int code;
+	const OtherEnum(this.code);
 }

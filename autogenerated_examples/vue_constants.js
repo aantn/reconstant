@@ -6,9 +6,9 @@ export const OTHER_CONSTANT = 42
 
 // enums
 export const SomeEnum = {
-	A : 0,
-	B : 1,
-	C : 2,
+	A:0,
+	B:1,
+	C:2,
 }
 
 SomeEnum.Mixin = {
@@ -17,8 +17,11 @@ SomeEnum.Mixin = {
   }
 }
 export const OtherEnum = {
-	FOO : 0,
-	BAR : 1,
+	FOO:0,
+	BAR:1,
+	BAZ:2,
+	QUUX:5,
+	CORGE:6,
 }
 
 OtherEnum.Mixin = {

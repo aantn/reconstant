@@ -6,11 +6,14 @@ pub const OTHER_CONSTANT: i32 = 42;
 
 // enums
 pub enum SomeEnum {
-	A, 
-	B, 
-	C
+	A=0,
+	B=1,
+	C=2,
 }
 pub enum OtherEnum {
-	FOO, 
-	BAR
+	FOO=0,
+	BAR=1,
+	BAZ=2,
+	QUUX=5,
+	CORGE=6,
 }

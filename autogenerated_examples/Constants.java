@@ -7,13 +7,31 @@ public final class Constants {
 
 	// enums
 	public enum SomeEnum {
-		A, 
-		B, 
-		C
+		A(0),
+		B(1),
+		C(2);
+		private final int value;
+		SomeEnum(int value) {
+			this.value = value;
+		}
+		public int getValue() {
+			return this.value;
+		}
 	}
+
 	public enum OtherEnum {
-		FOO, 
-		BAR
+		FOO(0),
+		BAR(1),
+		BAZ(2),
+		QUUX(5),
+		CORGE(6);
+		private final int value;
+		OtherEnum(int value) {
+			this.value = value;
+		}
+		public int getValue() {
+			return this.value;
+		}
 	}
 
 }

@@ -14,7 +14,10 @@ package constants is
 	);
 	type OtherEnum is (
 		FOO,
-		BAR
+		BAR,
+		BAZ,
+		QUUX,
+		CORGE
 	);
 
 end package;

@@ -1,15 +1,50 @@
 import argparse
 import os
+import re
 import yaml
 import textwrap
 import inflection
+from fastnumbers import isint
 from typing import Dict, List, TextIO, Union
-from pydantic import BaseModel, PrivateAttr
+from pydantic import BaseModel, PrivateAttr, model_validator
 
+class EnumValueReference (BaseModel):
+    enum_name: str
+    value_name: str
+    _value: int | None = None
+
+class EnumValue (BaseModel):
+    name: str
+    value: int | EnumValueReference | None = None
+    
+    @model_validator(mode="before")
+    @classmethod
+    def convert_string_to_dict(cls, data):
+        if isinstance(data, str):
+            match = re.search(r'^([\w\-_]+)(?::([\w\-_]+)(?:::([\w\-_]+))?)?$', data)
+            if (not match):
+                raise Exception("Enum value could not be parsed: " + data)
+            result = { "name": match.group(1) }
+            if match.group(2) is not None:
+                if isint(match.group(2)):
+                    if match.group(3) is not None:
+                        raise Exception("Number was used as a Enum name: " + data)
+                    # Set enum value to integer
+                    result["value"] = int(match.group(2))
+                else:
+                    if match.group(3) is None:
+                        raise Exception("Enum name was given, but no enum value: " + data)
+                    # Set enum value to reference of another enum
+                    result["value"] = {
+                        "enum_name": match.group(2),
+                        "value_name": match.group(3)
+                    }
+            return result
+        return data
 
 class Enum (BaseModel):
     name: str
-    values: List[str]
+    values: List[EnumValue]
 
 
 class Constant (BaseModel):
@@ -19,6 +54,7 @@ class Constant (BaseModel):
 
 class Outputer (BaseModel):
     path: str
+    _buffered_enum_values: list[EnumValueReference] = []
     _output: TextIO = PrivateAttr()
     _comment_mark: str = PrivateAttr()
     _comment_indentation: int = PrivateAttr() # doesn't apply to the comment in output_header()
@@ -32,9 +68,49 @@ class Outputer (BaseModel):
     def __del__(self):
         self._output.close()
 
-    def output_enum(self, enum: Enum, prefix="", assignment="=", suffix=""):
+    def getEnumValue(self, value_identifier: EnumValueReference) -> str:
+        return f"{value_identifier.enum_name}.{value_identifier.value_name}"
+
+    def formatEnumEntry(self, enum_name: str, enum_value_name: str, enum_value: int | str, isfirst:bool, islast:bool):
+        return ""
+
+    def output_enum(self, enum: Enum):
+        # The value that will be added to the last explicit value (or 0 in case there is no explicit)
+        iterator_value: int = 0
+        # The last value that was explicitly given by the user
+        last_explicit_value : str | int | EnumValueReference | None = None
         for (i, value) in enumerate(enum.values):
-            self._output.write(f"{prefix}{value} {assignment} {i}{suffix}\n")
+            enum_value = value.value    # The value the enum value is supposed to represent
+            output_value = 0
+            if enum_value is None:
+                if last_explicit_value is None:   # Set to iterator_value
+                    output_value = iterator_value
+                else:   # Set to the last specified value + iterator_value
+                    if type(last_explicit_value) == int:
+                        output_value = last_explicit_value + iterator_value
+                    if type(last_explicit_value) == EnumValueReference:
+                        output_value = self.getEnumValue(enum_value) + f' + {iterator_value}'
+                iterator_value += 1
+            else:
+                if type(enum_value) == EnumValueReference:
+                    find_res = [val._value for val in self._buffered_enum_values 
+                                if val.enum_name == enum_value.enum_name and val.value_name == enum_value.value_name]
+                    if len(find_res) > 0 and find_res[0] is not None:
+                        output_value = find_res[0]
+                        enum_value = find_res[0]
+                    else:
+                        output_value = self.getEnumValue(enum_value)
+                else:
+                    output_value = enum_value
+                last_explicit_value = enum_value
+                iterator_value = 1
+            if type(output_value) == int:
+                new_ref = EnumValueReference(enum_name=enum.name, value_name=value.name)
+                new_ref._value = output_value
+                self._buffered_enum_values.append(new_ref)
+            self._output.write(
+                self.formatEnumEntry(enum.name, value.name, output_value, i == 0, i == len(enum.values) - 1)
+            )
 
     def output_comment(self, comment):
         indent = '\t' * self._comment_indentation
@@ -58,19 +134,30 @@ class Outputer (BaseModel):
 
 class Python2Outputer (Outputer):
 
-    def output_enum(self, constant : Constant):
-        super().output_enum(constant, prefix=f"{inflection.underscore(constant.name).upper()}_")
+    def getEnumValue(self, value_identifier: EnumValueReference) -> str:
+        return f"{inflection.underscore(value_identifier.enum_name).upper()}_{value_identifier.value_name}"
 
+    def formatEnumEntry(self, enum_name: str, enum_value_name: str, enum_value: int | str, isfirst:bool, islast:bool):
+        enum_name = inflection.underscore(enum_name).upper()
+        enum_value_name = inflection.underscore(enum_value_name).upper()
+        return f"{enum_name}_{enum_value_name}={enum_value}\n"
 
 class Python3Outputer (Outputer):
-        
+    enum_type: str = "Enum"
+    
     def output_header(self):
         super().output_header()
-        self._output.write("from enum import Enum\n")
+        self._output.write(f"from enum import {self.enum_type}\n")
+
+    def getEnumValue(self, value_identifier: EnumValueReference) -> str:
+        return f"{value_identifier.enum_name}.{value_identifier.value_name}.value"
+
+    def formatEnumEntry(self, enum_name: str, enum_value_name: str, enum_value: int | str, isfirst:bool, islast:bool):
+        return f"\t{enum_value_name}={enum_value}\n"
 
     def output_enum(self, enum : Enum):
-        self._output.write(f"class {enum.name}(Enum):\n")
-        super().output_enum(enum, prefix=f"\t")
+        self._output.write(f"class {enum.name}({self.enum_type}):\n")
+        super().output_enum(enum)
         self._output.write(f"\n")
 
 
@@ -79,9 +166,12 @@ class JavascriptOutputer (Outputer):
     def __init__(self, *args, **kwargs):
         super().__init__(comment_mark="//", *args, **kwargs)
 
+    def formatEnumEntry(self, enum_name: str, enum_value_name: str, enum_value: int | str, isfirst:bool, islast:bool):
+        return f"\t{enum_value_name}:{enum_value},\n"
+
     def output_enum(self, enum : Enum):
         self._output.write(f"export const {enum.name} = {{\n")
-        super().output_enum(enum, prefix=f"\t", assignment=":", suffix=",")
+        super().output_enum(enum)
         self._output.write(f"}}\n")
 
     def output_constant(self, constant: Constant):
@@ -93,6 +183,9 @@ class JavaOutputer (Outputer):
     def __init__(self, *args, **kwargs):
         super().__init__(comment_mark="//", comment_indentation=1, *args, **kwargs)
 
+    def getEnumValue(self, value_identifier: EnumValueReference) -> str:
+            return f"{value_identifier.enum_name}.{value_identifier.value_name}.getValue()"
+
     def output_header(self):
         super().output_header()
         class_name = self._get_class_name()
@@ -102,14 +195,26 @@ class JavaOutputer (Outputer):
 
     def output_footer(self):
         super().output_footer()
-        self._output.write("\n}")
+        self._output.write("}")
 
     def _get_class_name(self):
         return os.path.basename(self.path).replace(".java", "")
 
+    def formatEnumEntry(self, enum_name: str, enum_value_name: str, enum_value: int | str, isfirst:bool, islast:bool):
+        return f"\t\t{enum_value_name}({enum_value}){';' if islast else ','}\n"
+
     def output_enum(self, enum : Enum):
-        separator = ', \n\t\t'
-        self._output.write(f"\tpublic enum {enum.name} {{\n\t\t{separator.join([val for val in enum.values])}\n\t}}\n")
+        self._output.write(f"\tpublic enum {enum.name} {'{'}\n")
+        super().output_enum(enum)
+        self._output.write( """\t\tprivate final int value;\n"""
+                           f"""\t\t{enum.name}""" """(int value) {\n"""
+                            """\t\t\tthis.value = value;\n"""
+                            """\t\t}\n"""
+                            """\t\tpublic int getValue() {\n"""
+                            """\t\t\treturn this.value;\n"""
+                            """\t\t}\n"""
+                            """\t}\n\n""")
+        #self._output.write( {separator.join([val.name for val in enum.values])}\n\t}}\n")
 
     def output_constant(self, constant: Constant):
         name = inflection.underscore(constant.name).upper()
@@ -124,9 +229,16 @@ class RustOutputer (Outputer):
     def __init__(self, *args, **kwargs):
         super().__init__(comment_mark="//", *args, **kwargs)
 
+    def getEnumValue(self, value_identifier: EnumValueReference) -> str:
+        return f"{value_identifier.enum_name}::{value_identifier.value_name}"
+
+    def formatEnumEntry(self, enum_name: str, enum_value_name: str, enum_value: int | str, isfirst:bool, islast:bool):
+        return f"\t{enum_value_name}={enum_value},\n"
+
     def output_enum(self, enum : Enum):
-        separator = ', \n\t'
-        self._output.write(f"pub enum {enum.name} {{\n\t{separator.join([val for val in enum.values])}\n}}\n")
+        self._output.write(f"pub enum {enum.name} {'{'}\n")
+        super().output_enum(enum)
+        self._output.write("}\n")
 
     def output_constant(self, constant: Constant):
         name = inflection.underscore(constant.name).upper()
@@ -156,8 +268,18 @@ class COutputer (Outputer):
     def _get_guard_name(self):
         return self.path.replace('/', '_').replace(".", "_").upper()
 
+    def getEnumValue(self, value_identifier: EnumValueReference) -> str:
+        return f"{value_identifier.value_name}"
+
+    def formatEnumEntry(self, enum_name: str, enum_value_name: str, enum_value: int | str, isfirst:bool, islast:bool):
+        enum_name = inflection.underscore(enum_name).upper()
+        enum_value_name = inflection.underscore(enum_value_name).upper()
+        return f"\t{enum_name}_{enum_value_name}={enum_value},\n"
+
     def output_enum(self, enum : Enum):
-        self._output.write(f"typedef enum {{ {', '.join([val for val in enum.values])} }} {enum.name};\n")
+        self._output.write("typedef enum {\n")
+        super().output_enum(enum)
+        self._output.write(f"{'}'}  {enum.name};\n")
 
     def output_constant(self, constant: Constant):
         name = inflection.underscore(constant.name).upper()
@@ -189,8 +311,16 @@ class ROutputer (Outputer):
     def __init__(self, *args, **kwargs):
         super().__init__(comment_mark="#", *args, **kwargs)
 
+    def getEnumValue(self, value_identifier: EnumValueReference) -> str:
+        return f"{inflection.underscore(value_identifier.enum_name).upper()}_{value_identifier.value_name}"
+
+    def formatEnumEntry(self, enum_name: str, enum_value_name: str, enum_value: int | str, isfirst:bool, islast:bool):
+        enum_name = inflection.underscore(enum_name).upper()
+        enum_value_name = inflection.underscore(enum_value_name).upper()
+        return f"{enum_name}_{enum_value_name} <- {enum_value}\n"
+
     def output_enum(self, constant : Constant):
-        super().output_enum(constant, assignment="<-", prefix=f"{inflection.underscore(constant.name).upper()}_")
+        super().output_enum(constant)
 
     def output_constant(self, constant: Constant, prefix="", assignment="<-", suffix=""):
         if type(constant.value) == int:
@@ -212,11 +342,17 @@ class DartOutputer (Outputer):
         super().output_header()
         self._output.write("library constants;\n\n")
 
+    def getEnumValue(self, value_identifier: EnumValueReference) -> str:
+            return f"{value_identifier.enum_name}.{value_identifier.value_name.lower()}.code"
+
+    def formatEnumEntry(self, enum_name: str, enum_value_name: str, enum_value: int | str, isfirst:bool, islast:bool):
+        # Convert enum values to lowercase for more Dart-like style
+        return f"\t{enum_value_name.lower()}({enum_value}){';' if islast else ','}\n"
+
     def output_enum(self, enum: Enum):
         self._output.write(f"enum {enum.name} {{\n")
-        # Convert enum values to lowercase for more Dart-like style
-        values = ",\n  ".join([val.lower() for val in enum.values])
-        self._output.write(f"  {values}\n}}\n")
+        super().output_enum(enum)
+        self._output.write(f"\n\tfinal int code;\n\tconst {enum.name}(this.code);\n}}\n")
 
     def output_constant(self, constant: Constant):
         # Convert constant names to camelCase for Dart conventions
@@ -247,9 +383,14 @@ class VhdlOutputer (Outputer):
         super().output_footer()
         self._output.write("\nend package;\n")
 
+    def formatEnumEntry(self, enum_name: str, enum_value_name: str, enum_value: int | str, isfirst:bool, islast:bool):
+        # Convert enum values to lowercase for more Dart-like style
+        return f"\t\t{enum_value_name}{'' if islast else ','}\n"
+
     def output_enum(self, enum : Enum):
-        separator = ',\n\t\t'
-        self._output.write(f"\ttype {enum.name} is (\n\t\t{separator.join([val for val in enum.values])}\n\t);\n")
+        self._output.write(f"\ttype {enum.name} is (\n")
+        super().output_enum(enum)
+        self._output.write(f"\t);\n")
 
     def output_constant(self, constant: Constant):
         name = inflection.underscore(constant.name).upper()
@@ -281,7 +422,7 @@ class RootConfig (BaseModel):
 
 
 def process_input(config: RootConfig):
-    outputers = [getattr(config.outputs, x) for x in config.outputs.__fields_set__]
+    outputers = [getattr(config.outputs, x) for x in config.outputs.model_fields_set]
 
     for outputer in outputers:
         outputer.output_header()
@@ -301,7 +442,7 @@ def main():
 
     with open(args.input, "r") as yaml_input:
         python_obj = yaml.safe_load(yaml_input)
-        config = RootConfig.parse_obj(python_obj)
+        config = RootConfig.model_validate(python_obj)
         process_input(config)
 
 if __name__ == "__main__":
